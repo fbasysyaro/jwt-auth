@@ -1,29 +1,61 @@
+// ...existing code...
 package services
 
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
+
 	"jwt-auth/internal/application/dto"
 	"jwt-auth/internal/domain/entities"
 	"jwt-auth/internal/domain/repositories"
 	"jwt-auth/internal/domain/services"
-	"jwt-auth/internal/infrastructure/jwt"
-	"strings"
-	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
 type authServiceImpl struct {
-	userRepo   repositories.UserRepository
-	jwtManager *jwt.JWTManager
+	userRepo       repositories.UserRepository
+	jwtManager     services.JWTManager
+	emailService   services.EmailService
+	tokenBlacklist services.TokenBlacklistService
 }
 
-func NewAuthService(userRepo repositories.UserRepository, jwtManager *jwt.JWTManager) services.AuthService {
+func NewAuthService(userRepo repositories.UserRepository, jwtManager services.JWTManager, emailService services.EmailService, tokenBlacklist services.TokenBlacklistService) services.AuthService {
 	return &authServiceImpl{
-		userRepo:   userRepo,
-		jwtManager: jwtManager,
+		userRepo:       userRepo,
+		jwtManager:     jwtManager,
+		emailService:   emailService,
+		tokenBlacklist: tokenBlacklist,
 	}
+}
+
+func (s *authServiceImpl) Logout(ctx context.Context, token string) error {
+	// Blacklist the token using the injected tokenBlacklist service
+	// For demo, use 1 hour expiration
+	if s.tokenBlacklist != nil {
+		err := s.tokenBlacklist.BlacklistToken(ctx, token, int64(time.Hour.Seconds()))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *authServiceImpl) InitiatePasswordReset(ctx context.Context, email string) error {
+	// TODO: Implement password reset initiation using emailService
+	return nil
+}
+
+func (s *authServiceImpl) ResetPassword(ctx context.Context, token, newPassword string) error {
+	// TODO: Implement password reset logic
+	return nil
+}
+
+func (s *authServiceImpl) VerifyEmail(ctx context.Context, token string) error {
+	// TODO: Implement email verification logic
+	return nil
 }
 
 func (s *authServiceImpl) Register(ctx context.Context, req *dto.RegisterRequest) (*dto.AuthResponse, error) {
@@ -50,18 +82,20 @@ func (s *authServiceImpl) Register(ctx context.Context, req *dto.RegisterRequest
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
-	// Generate tokens
-	userClaims := &dto.UserClaims{
-		UserID:   user.ID,
-		Username: user.Username,
-		Email:    user.Email,
+	// Generate tokens using domain interface
+	claims := map[string]interface{}{
+		"username": user.Username,
+		"email":    user.Email,
 	}
-
-	accessToken, refreshToken, err := s.jwtManager.GenerateTokens(userClaims)
+	userID := fmt.Sprintf("%d", user.ID)
+	accessToken, err := s.jwtManager.GenerateToken(userID, claims)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate tokens: %w", err)
+		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
-
+	refreshToken, err := s.jwtManager.GenerateRefreshToken(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
+	}
 	return &dto.AuthResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
@@ -83,18 +117,20 @@ func (s *authServiceImpl) Login(ctx context.Context, req *dto.LoginRequest) (*dt
 		return nil, fmt.Errorf("invalid email or password")
 	}
 
-	// Generate tokens
-	userClaims := &dto.UserClaims{
-		UserID:   user.ID,
-		Username: user.Username,
-		Email:    user.Email,
+	// Generate tokens using domain interface
+	claims := map[string]interface{}{
+		"username": user.Username,
+		"email":    user.Email,
 	}
-
-	accessToken, refreshToken, err := s.jwtManager.GenerateTokens(userClaims)
+	userID := fmt.Sprintf("%d", user.ID)
+	accessToken, err := s.jwtManager.GenerateToken(userID, claims)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate tokens: %w", err)
+		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
-
+	refreshToken, err := s.jwtManager.GenerateRefreshToken(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
+	}
 	return &dto.AuthResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
@@ -105,24 +141,31 @@ func (s *authServiceImpl) Login(ctx context.Context, req *dto.LoginRequest) (*dt
 }
 
 func (s *authServiceImpl) RefreshToken(ctx context.Context, refreshToken string) (*dto.AuthResponse, error) {
-	// Validate and refresh token
-	accessToken, newRefreshToken, err := s.jwtManager.RefreshToken(refreshToken)
+	// Validate refresh token
+	claims, err := s.jwtManager.ValidateToken(refreshToken)
 	if err != nil {
-		return nil, fmt.Errorf("failed to refresh token: %w", err)
+		return nil, fmt.Errorf("invalid refresh token: %w", err)
 	}
-
-	// Validate the new access token to get user claims
-	userClaims, err := s.jwtManager.ValidateToken(accessToken)
+	userID, ok := claims["user_id"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid user_id in token claims")
+	}
+	// Generate new tokens
+	accessToken, err := s.jwtManager.GenerateToken(userID, claims)
 	if err != nil {
-		return nil, fmt.Errorf("failed to validate new token: %w", err)
+		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
-
+	newRefreshToken, err := s.jwtManager.GenerateRefreshToken(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
+	}
 	// Get user details
-	user, err := s.userRepo.GetByID(ctx, userClaims.UserID)
+	userIntID := 0
+	fmt.Sscanf(userID, "%d", &userIntID)
+	user, err := s.userRepo.GetByID(ctx, userIntID)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
 	}
-
 	return &dto.AuthResponse{
 		AccessToken:  accessToken,
 		RefreshToken: newRefreshToken,
@@ -135,6 +178,28 @@ func (s *authServiceImpl) RefreshToken(ctx context.Context, refreshToken string)
 func (s *authServiceImpl) ValidateToken(ctx context.Context, token string) (*dto.UserClaims, error) {
 	// Remove Bearer prefix if present
 	token = strings.TrimPrefix(token, "Bearer ")
-
-	return s.jwtManager.ValidateToken(token)
+	// Check if token is blacklisted
+	if s.tokenBlacklist != nil {
+		blacklisted, err := s.tokenBlacklist.IsTokenBlacklisted(ctx, token)
+		if err != nil {
+			return nil, err
+		}
+		if blacklisted {
+			return nil, fmt.Errorf("token is blacklisted")
+		}
+	}
+	claims, err := s.jwtManager.ValidateToken(token)
+	if err != nil {
+		return nil, err
+	}
+	userID, _ := claims["user_id"].(string)
+	username, _ := claims["username"].(string)
+	email, _ := claims["email"].(string)
+	userIntID := 0
+	fmt.Sscanf(userID, "%d", &userIntID)
+	return &dto.UserClaims{
+		UserID:   userIntID,
+		Username: username,
+		Email:    email,
+	}, nil
 }

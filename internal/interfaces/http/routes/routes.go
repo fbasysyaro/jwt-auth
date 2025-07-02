@@ -5,17 +5,24 @@ import (
 	"jwt-auth/internal/interfaces/http/middleware"
 
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func SetupRoutes(
 	authHandler *handlers.AuthHandler,
 	jwtMiddleware *middleware.JWTMiddleware,
+	rateLimiter *middleware.RateLimiter,
 ) *gin.Engine {
 
 	// Set Gin mode
 	gin.SetMode(gin.ReleaseMode)
 
-	router := gin.Default()
+	router := gin.New()
+	// Add monitoring/logging middleware
+	router.Use(middleware.Logger())
+	router.Use(middleware.RequestTracing())
+	router.Use(gin.Recovery())
 
 	// Add CORS middleware
 	router.Use(func(c *gin.Context) {
@@ -42,12 +49,19 @@ func SetupRoutes(
 	// API v1 routes
 	v1 := router.Group("/api/v1")
 
+	// Swagger documentation
+	v1.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
 	// Public routes (no authentication required)
 	auth := v1.Group("/auth")
+	auth.Use(rateLimiter.Limit()) // General rate limiting for all auth endpoints
 	{
 		auth.POST("/register", authHandler.Register)
-		auth.POST("/login", authHandler.Login)
+		auth.POST("/login", authHandler.Login) // Stricter rate limit for login
 		auth.POST("/refresh", authHandler.RefreshToken)
+		auth.POST("/forgot-password", authHandler.ForgotPassword)
+		auth.POST("/reset-password", authHandler.ResetPassword)
+		auth.GET("/verify-email/:token", authHandler.VerifyEmail)
 	}
 
 	// Protected routes (authentication required)

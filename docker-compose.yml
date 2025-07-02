@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    container_name: jwt_auth_api
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8080
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=NewSecurePassword123!
+      - DB_NAME=jwt_auth
+      - DB_SSLMODE=disable
+      - JWT_SECRET=feh5tpb9aYtPxbCAxRKHZU967WyH3yjE
+      - JWT_ACCESS_EXPIRY=1h
+      - JWT_REFRESH_EXPIRY=24h
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=RedisSecurePassword123!
+      - RATE_LIMIT=5
+      - RATE_LIMIT_PERIOD=60
+      - SMTP_HOST=smtp.mailtrap.io
+      - SMTP_PORT=2525
+      - SMTP_USER=your_mailtrap_user
+      - SMTP_PASSWORD=your_mailtrap_password
+      - SMTP_FROM=no-reply@your-domain.com
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+    networks:
+      - jwt_auth_network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: jwt_auth_db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=NewSecurePassword123!
+      - POSTGRES_DB=jwt_auth
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    networks:
+      - jwt_auth_network
+
+  redis:
+    image: redis:alpine
+    container_name: jwt_auth_redis
+    command: redis-server --requirepass RedisSecurePassword123!
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - jwt_auth_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  jwt_auth_network:
+    name: jwt_auth_network

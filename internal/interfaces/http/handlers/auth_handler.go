@@ -3,7 +3,9 @@ package handlers
 import (
 	"jwt-auth/internal/application/dto"
 	"jwt-auth/internal/domain/services"
+	"jwt-auth/internal/interfaces/http/middleware"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,11 +22,8 @@ func NewAuthHandler(authService services.AuthService) *AuthHandler {
 
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req dto.RegisterRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
-			Error:   "validation_error",
-			Message: err.Error(),
-		})
+	middleware.ValidateRequest(&req)(c)
+	if c.IsAborted() {
 		return
 	}
 
@@ -42,11 +41,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req dto.LoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
-			Error:   "validation_error",
-			Message: err.Error(),
-		})
+	middleware.ValidateRequest(&req)(c)
+	if c.IsAborted() {
 		return
 	}
 
@@ -104,12 +100,97 @@ func (h *AuthHandler) Profile(c *gin.Context) {
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
-	// In a real-world application, you might want to:
-	// 1. Add the token to a blacklist
-	// 2. Store blacklisted tokens in Redis/Database
-	// 3. Check blacklist in middleware
+	// Get the token from Authorization header
+	authHeader := c.GetHeader("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
+			Error:   "invalid_token",
+			Message: "Invalid token format",
+		})
+		return
+	}
+
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+
+	// Process logout
+	err := h.authService.Logout(c.Request.Context(), token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, dto.ErrorResponse{
+			Error:   "logout_failed",
+			Message: err.Error(),
+		})
+		return
+	}
 
 	c.JSON(http.StatusOK, dto.SuccessResponse{
-		Message: "Logged out successfully",
+		Message: "Successfully logged out",
+	})
+}
+
+func (h *AuthHandler) ForgotPassword(c *gin.Context) {
+	var req struct {
+		Email string `json:"email" binding:"required,email"`
+	}
+	middleware.ValidateRequest(&req)(c)
+	if c.IsAborted() {
+		return
+	}
+
+	if err := h.authService.InitiatePasswordReset(c.Request.Context(), req.Email); err != nil {
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{
+			Error:   "password_reset_failed",
+			Message: "Failed to initiate password reset",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.SuccessResponse{
+		Message: "Password reset email sent",
+	})
+}
+
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var req struct {
+		Token    string `json:"token" binding:"required"`
+		Password string `json:"password" binding:"required,min=6"`
+	}
+	middleware.ValidateRequest(&req)(c)
+	if c.IsAborted() {
+		return
+	}
+
+	if err := h.authService.ResetPassword(c.Request.Context(), req.Token, req.Password); err != nil {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
+			Error:   "reset_failed",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.SuccessResponse{
+		Message: "Password reset successful",
+	})
+}
+
+func (h *AuthHandler) VerifyEmail(c *gin.Context) {
+	token := c.Param("token")
+	if token == "" {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
+			Error:   "invalid_token",
+			Message: "Verification token is required",
+		})
+		return
+	}
+
+	if err := h.authService.VerifyEmail(c.Request.Context(), token); err != nil {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
+			Error:   "verification_failed",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.SuccessResponse{
+		Message: "Email verified successfully",
 	})
 }
