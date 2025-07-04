@@ -1,189 +1,136 @@
-# JWT Authentication Service
+# Simple JWT Authentication Service
 
-A complete JWT authentication service written in Go using the Gin framework. This service is designed to be used as a standalone authentication service that can be integrated with other applications through Docker.
+A minimal JWT authentication service for other applications.
 
 ## Features
 
-- User registration and login
-- JWT token-based authentication
-- Access and refresh tokens
-- Token validation and refresh
-- Protected routes
-- User profile
-- Logout functionality
-- CORS support
-- PostgreSQL database
+1. **User Registration** - Register new users from other systems
+2. **User Login** - Authenticate users and get JWT tokens
+3. **Token Verification** - Validate JWT tokens for other systems
+4. **User Logout** - Blacklist tokens for secure logout
 
-## Prerequisites
+## Quick Start
 
-### For Docker Deployment (Recommended)
-- Docker
-- Docker Compose
-
-### For Local Development
-- Go 1.20 or later
-- PostgreSQL 12 or later
-- Make (optional, for using Makefile commands)
-
-## Setup
-
-### Using Docker (Recommended)
-
-1. Clone the repository
 ```bash
-git clone <repository-url>
-cd jwt-auth
+# With Docker
+docker-compose up --build -d
+
+# Local development
+go run main.go
 ```
-
-2. Build and run the containers:
-```bash
-docker-compose up -d
-```
-
-The service will be available at `http://localhost:8080`
-
-To stop the service:
-```bash
-docker-compose down
-```
-
-To view logs:
-```bash
-docker-compose logs -f api
-```
-
-### Integration with Other Applications
-
-To integrate this authentication service with your application:
-
-1. Add this service to your application's docker-compose.yml:
-```yaml
-services:
-  auth_service:
-    image: your-registry/jwt-auth:latest
-    environment:
-      - JWT_SECRET=your_jwt_secret_key
-      - JWT_ACCESS_EXPIRY=1h
-      - JWT_REFRESH_EXPIRY=24h
-    ports:
-      - "8080:8080"
-    networks:
-      - your_network
-```
-
-2. Use the authentication endpoints from your application:
-```
-http://auth_service:8080/api/v1/auth/*
-```
-
-### Local Development
-
-1. Clone the repository
-```bash
-git clone <repository-url>
-cd jwt-auth
-```
-
-2. Create a `.env` file in the root directory:
-```env
-# Server Configuration
-SERVER_HOST=localhost
-SERVER_PORT=8080
-
-# Database Configuration
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=your_password
-DB_NAME=jwt_auth
-DB_SSLMODE=disable
-
-# JWT Configuration
-JWT_SECRET=your_jwt_secret_key
-JWT_ACCESS_EXPIRY=1h
-JWT_REFRESH_EXPIRY=24h
-```
-
-3. Create the database:
-```bash
-createdb jwt_auth
-```
-
-4. Run the migrations:
-```bash
-psql -d jwt_auth -f migrations/000001_init.sql
-```
-
-5. Install dependencies:
-```bash
-go mod download
-```
-
-## Running the Service
-
-Start the server:
-```bash
-go run cmd/main.go
-```
-
-The server will start on `http://localhost:8080`
 
 ## API Endpoints
 
-### Public Routes
+### 1. Register User
+```bash
+POST /api/v1/register
+Content-Type: application/json
 
-- `POST /api/v1/auth/register` - Register a new user
-- `POST /api/v1/auth/login` - Login user
-- `POST /api/v1/auth/refresh` - Refresh access token
-- `GET /health` - Health check endpoint
+{
+  "username": "john_doe",
+  "email": "john@example.com", 
+  "password": "password123"
+}
 
-### Protected Routes (Requires Authentication)
-
-- `GET /api/v1/profile` - Get user profile
-- `POST /api/v1/logout` - Logout user
-- `GET /api/v1/dashboard` - Example protected route
-
-## Authentication
-
-Include the JWT token in the Authorization header:
+Response:
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": 1,
+    "username": "john_doe",
+    "email": "john@example.com",
+    "created_at": "2024-01-01T00:00:00Z"
+  }
+}
 ```
-Authorization: Bearer <your-token>
+
+### 2. Login User
+```bash
+POST /api/v1/login
+Content-Type: application/json
+
+{
+  "email": "john@example.com",
+  "password": "password123"
+}
+
+Response: Same as register
 ```
+
+### 3. Verify Token
+```bash
+POST /api/v1/verify
+Authorization: Bearer <token>
+
+# OR
+
+POST /api/v1/verify
+Content-Type: application/json
+
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+
+Response:
+{
+  "valid": true,
+  "user": {
+    "id": 1,
+    "username": "john_doe", 
+    "email": "john@example.com"
+  }
+}
+```
+
+### 4. Logout User
+```bash
+POST /api/v1/logout
+Authorization: Bearer <token>
+
+Response:
+{
+  "message": "Logged out successfully"
+}
+```
+
+## Integration with Other Systems
+
+### Example: Verify user in another application
+```go
+func verifyUser(token string) (*User, error) {
+    resp, err := http.Post("http://jwt-auth:8080/api/v1/verify", 
+        "application/json", 
+        strings.NewReader(`{"token":"`+token+`"}`))
+    
+    if err != nil || resp.StatusCode != 200 {
+        return nil, errors.New("invalid token")
+    }
+    
+    // Parse response and return user
+    return user, nil
+}
+```
+
+## Environment Variables
+
+- `PORT` - Server port (default: 8080)
+- `DB_HOST` - Database host (default: localhost)
+- `DB_PORT` - Database port (default: 5432)
+- `DB_USER` - Database user (default: postgres)
+- `DB_PASSWORD` - Database password
+- `DB_NAME` - Database name (default: jwt_auth)
+- `JWT_SECRET` - JWT signing secret
 
 ## Project Structure
 
-This project follows Clean Architecture principles. See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed explanation.
-
 ```
-internal/
-├── domain/          # Business logic & interfaces
-├── application/     # Use cases & DTOs
-├── infrastructure/  # External implementations
-└── interfaces/      # HTTP handlers & config
+/
+├── main.go           # Application entry point
+├── config/
+│   └── config.go     # Configuration and DB setup
+├── handler/
+│   └── auth.go       # HTTP handlers (register, login, verify, logout)
+└── repository/
+    ├── user.go       # User database operations
+    └── token.go      # JWT token operations
 ```
-
-## Error Handling
-
-The service returns appropriate HTTP status codes and error messages in a consistent format:
-
-```json
-{
-  "error": "error_code",
-  "message": "Descriptive error message"
-}
-```
-
-## Success Response Format
-
-Successful responses follow this format:
-
-```json
-{
-  "message": "Success message",
-  "data": {} // Optional data payload
-}
-```
-
-## License
-
-MIT License
