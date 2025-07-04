@@ -152,30 +152,14 @@ Authorization: Bearer <your-token>
 
 ## Project Structure
 
+This project follows Clean Architecture principles. See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed explanation.
+
 ```
-.
-├── cmd/
-│   └── main.go
-├── internal/
-│   ├── application/
-│   │   ├── dto/
-│   │   └── services/
-│   ├── domain/
-│   │   ├── entities/
-│   │   ├── repositories/
-│   │   └── services/
-│   ├── infrastructure/
-│   │   ├── database/
-│   │   ├── jwt/
-│   │   └── repositories/
-│   └── interfaces/
-│       ├── config/
-│       └── http/
-│           ├── handlers/
-│           ├── middleware/
-│           └── routes/
-├── migrations/
-└── .env
+internal/
+├── domain/          # Business logic & interfaces
+├── application/     # Use cases & DTOs
+├── infrastructure/  # External implementations
+└── interfaces/      # HTTP handlers & config
 ```
 
 ## Error Handling

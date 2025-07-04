@@ -39,6 +39,12 @@ func SetupRoutes(
 	})
 
 	// Health check endpoint
+	// @Summary Health Check
+	// @Description Check if the service is running
+	// @Tags health
+	// @Produce json
+	// @Success 200 {object} object{status=string,message=string}
+	// @Router /health [get]
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"status":  "ok",
@@ -57,7 +63,7 @@ func SetupRoutes(
 	auth.Use(rateLimiter.Limit()) // General rate limiting for all auth endpoints
 	{
 		auth.POST("/register", authHandler.Register)
-		auth.POST("/login", authHandler.Login) // Stricter rate limit for login
+		auth.POST("/login", rateLimiter.LoginLimit(), authHandler.Login) // Stricter rate limit for login
 		auth.POST("/refresh", authHandler.RefreshToken)
 		auth.POST("/forgot-password", authHandler.ForgotPassword)
 		auth.POST("/reset-password", authHandler.ResetPassword)

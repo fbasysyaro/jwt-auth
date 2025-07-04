@@ -1,3 +1,29 @@
+// Package main JWT Authentication Service
+//
+// JWT Authentication Service API
+//
+// This is a JWT authentication service that provides user registration, login, and token management.
+//
+//	Schemes: http, https
+//	Host: localhost:8080
+//	BasePath: /api/v1
+//	Version: 1.0.0
+//	Contact: API Support<support@example.com>
+//
+//	Consumes:
+//	- application/json
+//
+//	Produces:
+//	- application/json
+//
+//	SecurityDefinitions:
+//	  Bearer:
+//	    type: apiKey
+//	    name: Authorization
+//	    in: header
+//	    description: Type "Bearer" followed by a space and JWT token.
+//
+// swagger:meta
 package main
 
 import (
@@ -6,7 +32,7 @@ import (
 	"jwt-auth/internal/infrastructure/database"
 	emailinfra "jwt-auth/internal/infrastructure/email"
 	"jwt-auth/internal/infrastructure/jwt"
-	redisinfra "jwt-auth/internal/infrastructure/redis"
+	"jwt-auth/internal/infrastructure/redis"
 	"jwt-auth/internal/infrastructure/repositories"
 	"jwt-auth/internal/interfaces/config"
 	"jwt-auth/internal/interfaces/http/handlers"
@@ -14,6 +40,8 @@ import (
 	"jwt-auth/internal/interfaces/http/routes"
 	"log"
 	"os"
+
+	_ "jwt-auth/docs"
 )
 
 func main() {
@@ -21,14 +49,22 @@ func main() {
 	cfg := config.LoadConfig()
 
 	// Initialize Redis
-	redisClient := redisinfra.NewRedisClient(&redisinfra.RedisConfig{
-		Host:     os.Getenv("REDIS_HOST"),
-		Port:     os.Getenv("REDIS_PORT"),
+	redisHost := os.Getenv("REDIS_HOST")
+	if redisHost == "" {
+		redisHost = "localhost"
+	}
+	redisPort := os.Getenv("REDIS_PORT")
+	if redisPort == "" {
+		redisPort = "6379"
+	}
+	redisClient := redis.NewRedisClient(&redis.RedisConfig{
+		Host:     redisHost,
+		Port:     redisPort,
 		Password: os.Getenv("REDIS_PASSWORD"),
 	})
 
 	// Initialize token blacklist service
-	tokenBlacklist := redisinfra.NewTokenBlacklistService(redisClient)
+	tokenBlacklist := redis.NewTokenBlacklistService(redisClient)
 
 	// Initialize email service (for password reset)
 	emailService := emailinfra.NewEmailService()

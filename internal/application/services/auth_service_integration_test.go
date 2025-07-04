@@ -7,21 +7,21 @@ import (
 	"jwt-auth/internal/application/dto"
 	appservices "jwt-auth/internal/application/services"
 	"jwt-auth/internal/infrastructure/jwt"
-	redisService "jwt-auth/internal/infrastructure/redis"
+	"jwt-auth/internal/infrastructure/redis"
 
-	"github.com/redis/go-redis/v9"
+	redisclient "github.com/redis/go-redis/v9"
 )
 
 func TestAuthService_Integration(t *testing.T) {
 	// Setup dependencies
 	userRepo := newMockUserRepository()
 	jwtManager := jwt.NewJWTManager()
-	redisClient := redis.NewClient(&redis.Options{
+	redisClient := redisclient.NewClient(&redisclient.Options{
 		Addr:     ":6379",                   // Use a real or mock Redis instance
 		Password: "RedisSecurePassword123!", // Use the password from your .env/docker-compose
 	})
 	emailSvc := newMockEmailService()
-	tokenBlacklist := redisService.NewTokenBlacklistService(redisClient)
+	tokenBlacklist := redis.NewTokenBlacklistService(redisClient)
 
 	authService := appservices.NewAuthService(userRepo, jwtManager, emailSvc, tokenBlacklist)
 

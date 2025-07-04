@@ -44,18 +44,83 @@ func (s *authServiceImpl) Logout(ctx context.Context, token string) error {
 }
 
 func (s *authServiceImpl) InitiatePasswordReset(ctx context.Context, email string) error {
-	// TODO: Implement password reset initiation using emailService
-	return nil
+	// Check if user exists
+	user, err := s.userRepo.GetByEmail(ctx, email)
+	if err != nil {
+		return fmt.Errorf("user not found")
+	}
+
+	// Generate reset token
+	resetToken, err := s.jwtManager.GenerateToken(fmt.Sprintf("%d", user.ID), map[string]interface{}{
+		"email": user.Email,
+		"type":  "password_reset",
+	})
+	if err != nil {
+		return err
+	}
+
+	// Send reset email
+	subject := "Password Reset Request"
+	body := fmt.Sprintf("Click here to reset your password: http://localhost:8080/api/v1/auth/reset-password?token=%s", resetToken)
+	return s.emailService.SendEmail(ctx, email, subject, body)
 }
 
 func (s *authServiceImpl) ResetPassword(ctx context.Context, token, newPassword string) error {
-	// TODO: Implement password reset logic
-	return nil
+	// Validate reset token
+	claims, err := s.jwtManager.ValidateToken(token)
+	if err != nil {
+		return fmt.Errorf("invalid reset token")
+	}
+
+	// Check token type
+	if tokenType, ok := claims["type"].(string); !ok || tokenType != "password_reset" {
+		return fmt.Errorf("invalid token type")
+	}
+
+	// Get user
+	userID, _ := claims["user_id"].(string)
+	userIntID := 0
+	fmt.Sscanf(userID, "%d", &userIntID)
+	user, err := s.userRepo.GetByID(ctx, userIntID)
+	if err != nil {
+		return fmt.Errorf("user not found")
+	}
+
+	// Hash new password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	// Update password
+	user.Password = string(hashedPassword)
+	return s.userRepo.Update(ctx, user)
 }
 
 func (s *authServiceImpl) VerifyEmail(ctx context.Context, token string) error {
-	// TODO: Implement email verification logic
-	return nil
+	// Validate verification token
+	claims, err := s.jwtManager.ValidateToken(token)
+	if err != nil {
+		return fmt.Errorf("invalid verification token")
+	}
+
+	// Check token type
+	if tokenType, ok := claims["type"].(string); !ok || tokenType != "email_verification" {
+		return fmt.Errorf("invalid token type")
+	}
+
+	// Get user
+	userID, _ := claims["user_id"].(string)
+	userIntID := 0
+	fmt.Sscanf(userID, "%d", &userIntID)
+	user, err := s.userRepo.GetByID(ctx, userIntID)
+	if err != nil {
+		return fmt.Errorf("user not found")
+	}
+
+	// Mark email as verified
+	user.EmailVerified = true
+	return s.userRepo.Update(ctx, user)
 }
 
 func (s *authServiceImpl) Register(ctx context.Context, req *dto.RegisterRequest) (*dto.AuthResponse, error) {
@@ -81,6 +146,15 @@ func (s *authServiceImpl) Register(ctx context.Context, req *dto.RegisterRequest
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
+
+	// Send email verification
+	verificationToken, _ := s.jwtManager.GenerateToken(fmt.Sprintf("%d", user.ID), map[string]interface{}{
+		"email": user.Email,
+		"type":  "email_verification",
+	})
+	subject := "Email Verification"
+	body := fmt.Sprintf("Click here to verify your email: http://localhost:8080/api/v1/auth/verify-email/%s", verificationToken)
+	s.emailService.SendEmail(ctx, user.Email, subject, body)
 
 	// Generate tokens using domain interface
 	claims := map[string]interface{}{

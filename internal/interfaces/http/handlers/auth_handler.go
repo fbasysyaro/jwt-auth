@@ -20,6 +20,16 @@ func NewAuthHandler(authService services.AuthService) *AuthHandler {
 	}
 }
 
+// Register godoc
+// @Summary Register a new user
+// @Description Register a new user with username, email and password
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body dto.RegisterRequest true "Registration request"
+// @Success 201 {object} dto.AuthResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Router /auth/register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req dto.RegisterRequest
 	middleware.ValidateRequest(&req)(c)
@@ -39,6 +49,16 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	c.JSON(http.StatusCreated, response)
 }
 
+// Login godoc
+// @Summary Login user
+// @Description Login with email and password
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body dto.LoginRequest true "Login request"
+// @Success 200 {object} dto.AuthResponse
+// @Failure 401 {object} dto.ErrorResponse
+// @Router /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req dto.LoginRequest
 	middleware.ValidateRequest(&req)(c)
@@ -58,6 +78,16 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// RefreshToken godoc
+// @Summary Refresh access token
+// @Description Refresh access token using refresh token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body object{refresh_token=string} true "Refresh token request"
+// @Success 200 {object} dto.AuthResponse
+// @Failure 401 {object} dto.ErrorResponse
+// @Router /auth/refresh [post]
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	var req struct {
 		RefreshToken string `json:"refresh_token" binding:"required"`
@@ -83,6 +113,16 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// Profile godoc
+// @Summary Get user profile
+// @Description Get current user profile information
+// @Tags user
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Success 200 {object} dto.SuccessResponse
+// @Failure 401 {object} dto.ErrorResponse
+// @Router /profile [get]
 func (h *AuthHandler) Profile(c *gin.Context) {
 	userClaims, exists := c.Get("user_claims")
 	if !exists {
@@ -99,6 +139,16 @@ func (h *AuthHandler) Profile(c *gin.Context) {
 	})
 }
 
+// Logout godoc
+// @Summary Logout user
+// @Description Logout current user and blacklist token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Success 200 {object} dto.SuccessResponse
+// @Failure 401 {object} dto.ErrorResponse
+// @Router /logout [post]
 func (h *AuthHandler) Logout(c *gin.Context) {
 	// Get the token from Authorization header
 	authHeader := c.GetHeader("Authorization")
