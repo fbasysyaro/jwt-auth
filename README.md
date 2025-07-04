@@ -48,7 +48,7 @@ Response:
 }
 ```
 
-### 2. Login User
+### 2. Login User (NO TOKEN REQUIRED)
 ```bash
 POST /api/v1/login
 Content-Type: application/json
@@ -58,7 +58,7 @@ Content-Type: application/json
   "password": "password123"
 }
 
-Response: Same as register
+Response: Same as register (returns new tokens)
 ```
 
 ### 3. Verify Token
@@ -142,10 +142,13 @@ func verifyUser(token string) (*User, error) {
 ```
 /
 ├── main.go           # Application entry point
+├── model/
+│   ├── user.go       # User data model
+│   └── auth.go       # Auth request/response models
 ├── config/
 │   └── config.go     # Configuration and DB setup
 ├── handler/
-│   └── auth.go       # HTTP handlers (register, login, verify, logout)
+│   └── auth.go       # HTTP handlers (register, login, verify, refresh, logout)
 └── repository/
     ├── user.go       # User database operations
     └── token.go      # JWT token operations

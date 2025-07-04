@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"jwt-auth/model"
 	"jwt-auth/repository"
 	"net/http"
 	"strings"
@@ -14,33 +15,6 @@ type AuthHandler struct {
 	jwtSecret string
 }
 
-type RegisterRequest struct {
-	Username string `json:"username" binding:"required"`
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6"`
-}
-
-type LoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
-}
-
-type VerifyRequest struct {
-	Token string `json:"token" binding:"required"`
-}
-
-type AuthResponse struct {
-	AccessToken  string           `json:"access_token"`
-	RefreshToken string           `json:"refresh_token"`
-	TokenType    string           `json:"token_type"`
-	ExpiresIn    int              `json:"expires_in"`
-	User         *repository.User `json:"user"`
-}
-
-type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token" binding:"required"`
-}
-
 func NewAuthHandler(userRepo *repository.UserRepository, tokenRepo *repository.TokenRepository, jwtSecret string) *AuthHandler {
 	return &AuthHandler{
 		userRepo:  userRepo,
@@ -51,19 +25,19 @@ func NewAuthHandler(userRepo *repository.UserRepository, tokenRepo *repository.T
 
 // Register user
 func (h *AuthHandler) Register(c *gin.Context) {
-	var req RegisterRequest
+	var req model.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Cek jika user exists
+	// Check if user exists
 	if existingUser, _ := h.userRepo.GetByEmail(req.Email); existingUser != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "User already exists"})
 		return
 	}
 
-	// Buat user
+	// Create user
 	user, err := h.userRepo.Create(req.Username, req.Email, req.Password)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
@@ -83,7 +57,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, AuthResponse{
+	c.JSON(http.StatusCreated, model.AuthResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		TokenType:    "Bearer",
@@ -92,28 +66,28 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	})
 }
 
-// Login user
+// Login user - NO TOKEN REQUIRED, just email/password
 func (h *AuthHandler) Login(c *gin.Context) {
-	var req LoginRequest
+	var req model.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Get user
+	// Get user by email
 	user, err := h.userRepo.GetByEmail(req.Email)
 	if err != nil || user == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	// Validasi password
+	// Validate password
 	if !h.userRepo.ValidatePassword(user, req.Password) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	// Generate tokens
+	// Generate new tokens
 	accessToken, err := h.tokenRepo.GenerateToken(user.ID, user.Username, user.Email, h.jwtSecret)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
@@ -126,7 +100,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, AuthResponse{
+	c.JSON(http.StatusOK, model.AuthResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		TokenType:    "Bearer",
@@ -135,9 +109,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
-// Verify validasi user tokens
+// Verify token
 func (h *AuthHandler) Verify(c *gin.Context) {
-	var req VerifyRequest
+	var req model.VerifyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		// Try to get token from Authorization header
 		authHeader := c.GetHeader("Authorization")
@@ -148,7 +122,7 @@ func (h *AuthHandler) Verify(c *gin.Context) {
 		req.Token = strings.TrimPrefix(authHeader, "Bearer ")
 	}
 
-	// Validasi token
+	// Validate token
 	claims, err := h.tokenRepo.ValidateToken(req.Token, h.jwtSecret)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
@@ -172,7 +146,7 @@ func (h *AuthHandler) Verify(c *gin.Context) {
 
 // Refresh token
 func (h *AuthHandler) Refresh(c *gin.Context) {
-	var req RefreshRequest
+	var req model.RefreshRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -215,7 +189,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	// Blacklist old refresh token
 	h.tokenRepo.BlacklistToken(req.RefreshToken)
 
-	c.JSON(http.StatusOK, AuthResponse{
+	c.JSON(http.StatusOK, model.AuthResponse{
 		AccessToken:  accessToken,
 		RefreshToken: newRefreshToken,
 		TokenType:    "Bearer",
@@ -224,7 +198,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	})
 }
 
-// Logout users
+// Logout user
 func (h *AuthHandler) Logout(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {

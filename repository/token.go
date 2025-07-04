@@ -24,13 +24,13 @@ func NewTokenRepository() *TokenRepository {
 		redisPort = "6379"
 	}
 	redisPassword := os.Getenv("REDIS_PASSWORD")
-	
+
 	client := redis.NewClient(&redis.Options{
 		Addr:     redisHost + ":" + redisPort,
 		Password: redisPassword,
 		DB:       0,
 	})
-	
+
 	return &TokenRepository{
 		redisClient: client,
 	}
@@ -41,7 +41,7 @@ func (r *TokenRepository) GenerateToken(userID int, username, email, secret stri
 		"user_id":  userID,
 		"username": username,
 		"email":    email,
-		"exp":      time.Now().Add(1 * time.Hour).Unix(), // 1 hour for access token
+		"exp":      time.Now().Add(1 * time.Hour).Unix(), // 1 jam untuk access token
 		"iat":      time.Now().Unix(),
 		"type":     "access",
 	}
@@ -53,7 +53,7 @@ func (r *TokenRepository) GenerateToken(userID int, username, email, secret stri
 func (r *TokenRepository) GenerateRefreshToken(userID int, secret string) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,
-		"exp":     time.Now().Add(7 * 24 * time.Hour).Unix(), // 7 days for refresh token
+		"exp":     time.Now().Add(7 * 24 * time.Hour).Unix(), // 7 hari untuk refresh token
 		"iat":     time.Now().Unix(),
 		"type":    "refresh",
 	}
@@ -63,7 +63,7 @@ func (r *TokenRepository) GenerateRefreshToken(userID int, secret string) (strin
 }
 
 func (r *TokenRepository) ValidateToken(tokenString, secret string) (jwt.MapClaims, error) {
-	// Check if token is blacklisted in Redis
+	// Cek jika token di blacklist di Redis
 	ctx := context.Background()
 	exists, err := r.redisClient.Exists(ctx, "blacklist:"+tokenString).Result()
 	if err == nil && exists > 0 {
@@ -90,6 +90,6 @@ func (r *TokenRepository) ValidateToken(tokenString, secret string) (jwt.MapClai
 
 func (r *TokenRepository) BlacklistToken(tokenString string) {
 	ctx := context.Background()
-	// Blacklist for 24 hours
+	// Blacklist 1 hari
 	r.redisClient.Set(ctx, "blacklist:"+tokenString, true, 24*time.Hour)
 }
