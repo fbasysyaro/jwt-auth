@@ -66,7 +66,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	})
 }
 
-// Login user - NO TOKEN REQUIRED, just email/password
+// Login user - requires username, password, and access token
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req model.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -74,39 +74,36 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Get user by email
-	user, err := h.userRepo.GetByEmail(req.Email)
+	// Validate access token first
+	claims, err := h.tokenRepo.ValidateToken(req.AccessToken, h.jwtSecret)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid access token"})
+		return
+	}
+
+	// Get user by username from token claims
+	tokenUsername, _ := claims["username"].(string)
+	if tokenUsername != req.Username {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Username mismatch"})
+		return
+	}
+
+	// Get user from database
+	tokenEmail, _ := claims["email"].(string)
+	user, err := h.userRepo.GetByEmail(tokenEmail)
 	if err != nil || user == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
 		return
 	}
 
 	// Validate password
 	if !h.userRepo.ValidatePassword(user, req.Password) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid password"})
 		return
 	}
 
-	// Generate new tokens
-	accessToken, err := h.tokenRepo.GenerateToken(user.ID, user.Username, user.Email, h.jwtSecret)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
-		return
-	}
-
-	refreshToken, err := h.tokenRepo.GenerateRefreshToken(user.ID, h.jwtSecret)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate refresh token"})
-		return
-	}
-
-	c.JSON(http.StatusOK, model.AuthResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		TokenType:    "Bearer",
-		ExpiresIn:    3600,
-		User:         user,
-	})
+	// Login successful
+	c.JSON(http.StatusOK, gin.H{"message": "Login successful"})
 }
 
 // Verify token

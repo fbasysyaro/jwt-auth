@@ -7,8 +7,9 @@ type RegisterRequest struct {
 }
 
 type LoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
+	Username    string `json:"username" binding:"required"`
+	Password    string `json:"password" binding:"required"`
+	AccessToken string `json:"access_token" binding:"required"`
 }
 
 type VerifyRequest struct {

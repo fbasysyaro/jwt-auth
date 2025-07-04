@@ -48,17 +48,21 @@ Response:
 }
 ```
 
-### 2. Login User (NO TOKEN REQUIRED)
+### 2. Login User
 ```bash
 POST /api/v1/login
 Content-Type: application/json
 
 {
-  "email": "john@example.com",
-  "password": "password123"
+  "username": "john_doe",
+  "password": "password123",
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 }
 
-Response: Same as register (returns new tokens)
+Response:
+{
+  "message": "Login successful"
+}
 ```
 
 ### 3. Verify Token
