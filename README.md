@@ -52,11 +52,11 @@ Response:
 ```bash
 POST /api/v1/login
 Content-Type: application/json
+Authorization: Bearer <access_token>
 
 {
   "username": "john_doe",
-  "password": "password123",
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "password": "password123"
 }
 
 Response:

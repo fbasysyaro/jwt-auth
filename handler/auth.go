@@ -66,7 +66,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	})
 }
 
-// Login user - requires username, password, and access token
+// Login user - requires username/password in body + access token in Authorization header
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req model.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -74,8 +74,16 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Validate access token first
-	claims, err := h.tokenRepo.ValidateToken(req.AccessToken, h.jwtSecret)
+	// Get access token from Authorization header
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Access token required in Authorization header"})
+		return
+	}
+	accessToken := strings.TrimPrefix(authHeader, "Bearer ")
+
+	// Validate access token
+	claims, err := h.tokenRepo.ValidateToken(accessToken, h.jwtSecret)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid access token"})
 		return
