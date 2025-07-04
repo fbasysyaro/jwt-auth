@@ -7,7 +7,8 @@ A minimal JWT authentication service for other applications.
 1. **User Registration** - Register new users from other systems
 2. **User Login** - Authenticate users and get JWT tokens
 3. **Token Verification** - Validate JWT tokens for other systems
-4. **User Logout** - Blacklist tokens for secure logout
+4. **Token Refresh** - Refresh access tokens using refresh tokens
+5. **User Logout** - Blacklist tokens for secure logout
 
 ## Quick Start
 
@@ -34,7 +35,10 @@ Content-Type: application/json
 
 Response:
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
   "user": {
     "id": 1,
     "username": "john_doe",
@@ -82,7 +86,19 @@ Response:
 }
 ```
 
-### 4. Logout User
+### 4. Refresh Token
+```bash
+POST /api/v1/refresh
+Content-Type: application/json
+
+{
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+
+Response: Same as login with new tokens
+```
+
+### 5. Logout User
 ```bash
 POST /api/v1/logout
 Authorization: Bearer <token>
